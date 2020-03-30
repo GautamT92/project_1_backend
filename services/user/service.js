@@ -1,8 +1,9 @@
 const bcrypt = require('bcryptjs');
 const saltRounds = 10;
 const jwt = require('jsonwebtoken');
-const keys = require('../../config/keys');
 const User = require('../../models/UserSchema');
+const { createHashedPassword, createSignedToken, validatePassword } = require('../../utils/passport');
+
 class UserService {
 	Register = async (params) => {
 		const { email, password } = params;
@@ -11,12 +12,7 @@ class UserService {
 			throw { message: 'User already exists' };
 		} else {
 			let newUser = new User(params);
-			const hashedPassword = await new Promise((resolve, reject) => {
-				bcrypt.hash(password, saltRounds, function(err, hash) {
-					if (err) reject(err);
-					resolve(hash);
-				});
-			});
+			const hashedPassword = await createHashedPassword(password);
 			newUser.password = hashedPassword;
 			let response = await newUser.save();
 			return response;
@@ -29,16 +25,14 @@ class UserService {
 		if (!user) {
 			throw { message: 'User not found' };
 		}
-		const isPasswordMatch = await bcrypt.compare(password, user.password);
+		const isPasswordMatch = await validatePassword(password, user.password);
 		if (isPasswordMatch) {
 			const payload = {
 				id: user._id,
 				name: user.name
 			};
 			try {
-				const token = await jwt.sign(payload, keys.secretOrKey, {
-					expiresIn: 31556926
-				});
+				const token = await createSignedToken(payload);
 				return {
 					success: true,
 					user,
